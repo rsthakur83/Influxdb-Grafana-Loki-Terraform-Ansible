@@ -1,0 +1,7 @@
+---
+- name: Monitor Node
+  hosts: monitor
+  become: true
+  become_user: root
+  roles:
+    - monitor

@@ -1,0 +1,124 @@
+---
+- name: Copying Influxdb repo
+  copy:
+    src: influxdb.repo
+    dest: /etc/yum.repos.d/
+  become: true
+
+- name: Copying grafana repo
+  copy:
+    src:  grafana.repo
+    dest: /etc/yum.repos.d/
+  become: true
+
+
+- name: Copying grafana config
+  copy:
+    src:  grafana.ini
+    dest: /etc/grafana/
+  become: true
+
+
+- name: Install package for grafana influxdb postfix
+  yum:
+    update_cache: true
+    name:
+      - influxdb 
+      - curl
+      - vim
+      - unzip
+      - wget
+      - postfix
+      - grafana
+    state: present
+
+
+- name: Start service influxdb, postfix, grafana
+  service:
+    name: "{{ item }}"
+    state: started
+  become: true
+  with_items:
+      - influxdb
+      - postfix
+      - grafana-server    
+
+- name: Set Influxb password
+  shell: curl -XPOST "http://localhost:8086/query" --data-urlencode "q=CREATE USER username WITH PASSWORD "{{ influxdb_user_password }}" WITH ALL PRIVILEGES"
+
+- name: Create database for metrics in inflxudb
+  shell: curl -XPOST 'http://localhost:8086/query' --data-urlencode 'q=CREATE DATABASE "metrics"'
+
+- name: Install Loki
+  shell: |
+     curl -s https://api.github.com/repos/grafana/loki/releases/latest | grep browser_download_url |  cut -d '"' -f 4 | grep loki-linux-amd64.zip | wget -i -
+     unzip loki-linux-amd64.zip
+     sudo mv loki-linux-amd64 /usr/local/bin/loki
+     sudo mkdir -p /data/loki
+     
+
+- name: Copying loki config
+  copy:
+    src:  loki-local-config.yaml
+    dest: /etc/
+  become: true
+
+- name: Copying loki service config
+  copy:
+    src:  loki.service
+    dest: /etc/systemd/system/
+  become: true
+
+
+- name: Restart service Loki
+  service:
+    name: loki.service
+    state: restarted
+
+
+- name: Get  Hostname
+  command: hostname -f
+  register: servername
+
+- name: Copy token in temporary file
+  shell: echo "{{ servername.stdout }}" > /tmp/servername
+
+- name: Updating generic file postfix
+  shell: |
+    echo root@"{{ servername.stdout }}" demo@testdemoapp.com >> /etc/postfix/generic
+    echo root@"{{ servername.stdout }}".testdemoapp.com "{{ servername.stdout }}"@testdemoapp.com >> /etc/postfix/generic
+    echo root@"{{ servername.stdout }}" demo@testdemoapp.com >> /etc/postfix/canonical
+    echo root@"{{ servername.stdout }}".testdemoapp.com "{{ servername.stdout }}"@testdemoapp.com >> /etc/postfix/canonical
+    postmap /etc/postfix/generic
+    postmap  /etc/postfix/canonical
+    echo 127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4 "{{ servername.stdout }}".demo.cloud >> /etc/hosts
+    ip=`hostname -I | awk '{print $1}'`
+    echo $ip "{{ servername.stdout }}".demo.cloud  >> /etc/hosts
+
+- name: Updating grafana config
+  shell: |
+    host=`hostname`
+    sed -i "s/monitoring-host/$host/g" /etc/grafana/grafana.ini
+   
+
+- name: Copying postfix config
+  copy:
+    src:  postfix.conf
+    dest: /etc/postfix/main.cf
+  become: true
+
+
+- name: Restart service postfix
+  service:
+    name: postfix
+    state: restarted
+
+- name: Restart service influxdb, postfix, grafana in all cases
+  service:
+    name: "{{ item }}"
+    state: restarted
+  become: true
+  with_items:
+      - influxdb
+      - postfix
+      - grafana-server
