@@ -1,4 +1,4 @@
-# Steps required to setup Monitoring server on GCP to monitor On-Premise Kubernetes Cluster, Postgres Database, RabbitMQ
+# Steps required to setup Monitoring server on AWS or GCP to monitor  Kubernetes Cluster, Postgres Database, RabbitMQ
 
 1) Download the terraform version v0.14.0 <https://releases.hashicorp.com/terraform/0.14.0/terraform_0.14.0_linux_amd64.zip>
 2) You should have the keys ( `.ssh/id_rsa.pub` and `.ssh/id_rsa`) under your home directory and if you have different user other than **root** then update correct path for the variable `pub_key` & `pvt_key` in the `vars.tf` file.
